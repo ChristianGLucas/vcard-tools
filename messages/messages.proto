@@ -1,0 +1,333 @@
+// This file defines the data contracts (messages) for your Axiom package.
+// Every node's --input and --output refers to a message defined here.
+//
+// Run `axiom create message <Name>` to scaffold a new message below.
+// Run `axiom generate` to compile these definitions into language bindings in gen/.
+//
+// DOCUMENTATION
+//   Comments written directly above a message or field declaration are extracted
+//   automatically at publish time and shown in the Axiom registry as documentation.
+//   Write your descriptions there — no separate doc files needed.
+//
+//   Leading comment  (no blank line before the declaration) → registry description ✓
+//   Detached comment (blank line before the declaration)    → ignored by registry  ✗
+//
+// This file is yours to edit. Axiom only appends new message blocks — it never
+// overwrites or removes content you have written.
+//
+// Vocabulary note (cross-package coherence with christiangeorgelucas/icalendar-tools,
+// the PIM sibling package most likely to co-occur with this one in a flow — e.g. a
+// "build a meeting invite from a contact" or "extract attendee info from a card"
+// composition): both packages use snake_case field names, a shared `Error` message
+// with `code`/`message`, a boolean `valid` + `repeated` issue/error list shape for
+// validation results, and `repeated string categories` for the CATEGORIES property
+// both formats define identically. Date-valued fields here (`birthday`,
+// `anniversary`) follow ISO 8601 partial-date form ("1990-04-15", or "--04-15" for a
+// year-less BDAY per RFC 6350 §4.3.1) rather than icalendar-tools' bare RFC 5545 form
+// ("19900415") — vCard and iCalendar genuinely use different date grammars at the
+// property level, so this is a deliberate boundary, not an inconsistency; a flow
+// composing the two re-formats at the edge.
+
+syntax = "proto3";
+
+package christiangeorgelucas.vcard_tools;
+
+option java_package = "gen";
+option java_outer_classname = "Messages";
+
+// A structured, deterministic failure. Every output message carries one; it is
+// unset on success. Nodes never throw on bad input — they return this instead.
+message Error {
+  // Stable machine-readable code: INVALID_VCARD, INVALID_ARGUMENT,
+  // LIMIT_EXCEEDED, or INTERNAL. INTERNAL means the package itself faulted,
+  // not the caller's input.
+  string code = 1;
+  // Human-readable detail naming exactly what was rejected and why.
+  string message = 2;
+}
+
+// Raw vCard document text, the input to every parsing/inspection node. Holds
+// zero or more concatenated "BEGIN:VCARD ... END:VCARD" blocks, exactly as a
+// .vcf file would contain. Capped at 5 MiB; larger input is rejected with
+// LIMIT_EXCEEDED before any parsing is attempted.
+message VCardTextInput {
+  string text = 1;
+  Error error = 2;
+}
+
+// Generated .vcf text — the output of BuildVCard, ConvertVersion, and
+// NormalizeVCard.
+message VCardTextOutput {
+  // The rendered vCard document text, ready to write to a .vcf file as-is.
+  // Empty on error.
+  string text = 1;
+  Error error = 2;
+}
+
+// A structured name (the N property), per RFC 6350 §6.2.2. `family`/`given`
+// are single values (ez-vcard, the wrapped library, models them as scalars);
+// `additional`/`prefixes`/`suffixes` are each multi-valued, matching the
+// library's own StructuredName model.
+message Name {
+  string family = 1;
+  string given = 2;
+  // Additional/middle names.
+  repeated string additional = 3;
+  // Honorific prefixes, e.g. "Dr.", "Ms.".
+  repeated string prefixes = 4;
+  // Honorific suffixes, e.g. "Jr.", "M.D.".
+  repeated string suffixes = 5;
+}
+
+// An EMAIL property.
+message Email {
+  string value = 1;
+  // TYPE parameter values, lowercased, e.g. "work", "home", "internet".
+  repeated string types = 2;
+  // PREF parameter (1 = most preferred, per RFC 6350 §5.3). 0 means no
+  // preference was stated.
+  int32 pref = 3;
+}
+
+// A TEL property.
+message Phone {
+  // The raw property value: a tel: URI in vCard 4 ("tel:+1-555-555-0100") or
+  // a bare number in vCard 2.1/3.0 ("+1 555 555 0100"), preserved as ez-vcard
+  // returns it — this node never reformats the number itself.
+  string value = 1;
+  // TYPE parameter values, lowercased, e.g. "work", "cell", "fax", "voice".
+  repeated string types = 2;
+  int32 pref = 3;
+}
+
+// An ADR property, split into its RFC 6350 §6.3.1 structured components.
+message Address {
+  string po_box = 1;
+  string extended = 2;
+  string street = 3;
+  string locality = 4;
+  string region = 5;
+  string postal_code = 6;
+  string country = 7;
+  repeated string types = 8;
+  int32 pref = 9;
+  // LABEL parameter: a pre-formatted mailing-label rendering of the address,
+  // if the source supplied one. Empty otherwise.
+  string label = 10;
+}
+
+// A URL property.
+message Url {
+  string value = 1;
+  repeated string types = 2;
+  int32 pref = 3;
+}
+
+// An IMPP property (an instant-messaging/VoIP handle URI, e.g.
+// "xmpp:alice@example.com").
+message Impp {
+  string value = 1;
+  repeated string types = 2;
+  int32 pref = 3;
+}
+
+// PHOTO property metadata. The image bytes themselves are never returned —
+// only enough to identify/fetch/size them — keeping this node's output
+// bounded regardless of how large an embedded photo is.
+message Photo {
+  // IANA media type, e.g. "image/jpeg". Empty if undetermined.
+  string mime_type = 1;
+  // The property value when it was a reference URI rather than inline data
+  // (vCard 2.1/3.0 PHOTO;VALUE=URI, or a vCard 4 PHOTO with a URI value).
+  // Empty when the source embedded the image inline instead.
+  string url = 2;
+  // True when the source embedded the image as inline base64 data rather
+  // than a URI reference. Declared `optional` so JSON output always states
+  // this explicitly, including the false case (proto3 would otherwise drop
+  // a bare `false` from the wire/JSON, making "no photo data" indistinguishable
+  // from "field not read").
+  optional bool has_inline_data = 3;
+  // Size of the inline data in bytes, decoded. 0 when `has_inline_data` is
+  // false. Declared `optional` for the same explicit-presence reason.
+  optional int32 byte_size = 4;
+}
+
+// A GEO property (RFC 6350 §6.5.2), a "geo:" URI with latitude/longitude.
+message Geo {
+  // Declared `optional`: (0, 0) is a real point on Earth ("null island"), so
+  // plain proto3 zero-value semantics would make it indistinguishable from
+  // "no GEO property present" in JSON output.
+  optional double latitude = 1;
+  optional double longitude = 2;
+  // The raw "geo:" URI value as the source wrote it, e.g.
+  // "geo:37.386013,-122.082932". Empty when GEO is absent.
+  string raw = 3;
+}
+
+// A normalized vCard contact — the canonical envelope this package's nodes
+// consume and emit. One instance represents one vCard (one BEGIN:VCARD /
+// END:VCARD block).
+message VCard {
+  // Source (or, from BuildVCard/ConvertVersion, target) vCard version:
+  // "2.1", "3.0", or "4.0".
+  string version = 1;
+  // UID property. Empty if absent — vCard, unlike iCalendar, does not
+  // require one.
+  string uid = 2;
+  // KIND property (vCard 4 only): "individual" (the default when absent),
+  // "group", "org", "location", or a source-defined extension value.
+  string kind = 3;
+  // FN property (the display/formatted name). Required by the spec on every
+  // vCard; ParseVCard preserves it exactly as found, even if empty.
+  string formatted_name = 4;
+  // N property (structured name). Unset (all lists empty) if absent —
+  // legal in vCard 4, where FN alone is sufficient.
+  Name name = 5;
+  // NICKNAME values, flattened from every NICKNAME property line.
+  repeated string nicknames = 6;
+  repeated Email emails = 7;
+  repeated Phone phones = 8;
+  repeated Address addresses = 9;
+  // ORG property, first component (the organization name itself).
+  string org = 10;
+  // ORG property, remaining components (organizational unit names, outer to
+  // inner).
+  repeated string org_units = 11;
+  string title = 12;
+  string role = 13;
+  repeated Url urls = 14;
+  // BDAY, as an ISO 8601 date ("1990-04-15") or a year-less partial date
+  // ("--04-15" per RFC 6350 §4.3.1). Empty if absent or if the source used a
+  // free-text BDAY (rare; vCard 4 permits TEXT-valued BDAY) — the raw text is
+  // then preserved in `birthday` as-is rather than dropped.
+  string birthday = 15;
+  // ANNIVERSARY (vCard 4 only), same date form as `birthday`.
+  string anniversary = 16;
+  // NOTE values, one entry per NOTE property line (vCard permits more than
+  // one).
+  repeated string notes = 17;
+  // CATEGORIES, flattened from every CATEGORIES property line.
+  repeated string categories = 18;
+  // PHOTO metadata. Unset (all fields empty/absent) if no PHOTO property.
+  Photo photo = 19;
+  repeated Impp impp = 20;
+  // GEO property. Unset (`latitude`/`longitude` both absent) if not present.
+  Geo geo = 21;
+  // GENDER property (vCard 4 only): the sex component — "M", "F", "O"
+  // (other), "N" (none/not applicable), or "U" (unknown) — optionally
+  // followed by ";" and free-text gender-identity, exactly as RFC 6350
+  // §6.2.7 encodes it. Empty if absent.
+  string gender = 22;
+  // LANG property values (preferred languages), e.g. "en-US".
+  repeated string languages = 23;
+  // TZ property, raw value: a UTC offset ("-0500") or an IANA zone id
+  // ("America/New_York"), as the source wrote it.
+  string timezone = 24;
+  // REV property (last-revision timestamp), as an ISO 8601 UTC instant in
+  // the extended form java.time.Instant.toString() produces, e.g.
+  // "2026-07-21T18:30:00Z" (note the dashes/colons — NOT the vCard wire
+  // format's compact "20260721T183000Z"). Empty if absent. BuildVCard parses
+  // this same extended form back with java.time.Instant.parse().
+  string revision = 25;
+  // SOURCE property values (URIs the vCard says it was retrieved from).
+  repeated string sources = 26;
+  Error error = 27;
+}
+
+// Zero or more contacts parsed from one document — the output of
+// ParseVCardList.
+message VCardList {
+  repeated VCard cards = 1;
+  // Number of vCards found. Declared `optional`: an empty document
+  // legitimately parses to 0 contacts, and that must stay distinguishable
+  // from "field not read" in JSON output.
+  optional int32 count = 2;
+  Error error = 3;
+}
+
+// One problem found by ValidateVCard.
+message ValidationIssue {
+  // Always "ERROR" — ez-vcard (the wrapped library) does not expose a
+  // graded warning/error severity from its validator, so every issue it
+  // raises is treated as blocking `valid`. Kept as a field (rather than
+  // dropped) so a future version can add real severity grading without an
+  // envelope change.
+  string severity = 1;
+  // The property class name the issue concerns, e.g. "FormattedName",
+  // "StructuredName". Empty when the issue is document-level (e.g. the text
+  // is not a vCard at all, or does not contain exactly one vCard).
+  string property = 2;
+  string message = 3;
+}
+
+// The result of validating a single vCard against its declared version's
+// rules — the output of ValidateVCard.
+message VCardValidationResult {
+  // True only when the input is exactly one vCard, it parses cleanly, and
+  // ez-vcard's validator raises no ERROR-severity issue for its version.
+  // Declared `optional` so JSON output states `false` explicitly rather than
+  // omitting the field — an invalid card is exactly the case a caller must
+  // not silently treat as "unknown."
+  optional bool valid = 1;
+  // Every problem found. Empty when `valid` is true.
+  repeated ValidationIssue issues = 2;
+  Error error = 3;
+}
+
+// The result of detecting the vCard version(s) present in a document — the
+// output of DetectVersion.
+message VCardVersionResult {
+  // The first vCard's version ("2.1", "3.0", or "4.0"). Empty when the
+  // document contains no vCard at all.
+  string version = 1;
+  // One entry per vCard block found, in document order — lets a caller see
+  // at a glance whether a multi-contact document mixes versions.
+  repeated string card_versions = 2;
+  Error error = 3;
+}
+
+// ConvertVersion input: a document plus the version to convert every vCard
+// in it to.
+message VCardConvertInput {
+  string text = 1;
+  // Target version: "3.0" or "4.0". (2.1 is not a supported conversion
+  // target — it predates several properties this package models, e.g.
+  // KIND/ANNIVERSARY/GENDER, so a lossless downgrade to it cannot be
+  // guaranteed; converting *from* 2.1 to 3.0/4.0 is fully supported.)
+  string target_version = 2;
+  Error error = 3;
+}
+
+// EmailList: the output of ExtractEmails.
+message EmailList {
+  repeated Email emails = 1;
+  Error error = 2;
+}
+
+// PhoneList: the output of ExtractPhones.
+message PhoneList {
+  repeated Phone phones = 1;
+  Error error = 2;
+}
+
+// AddressList: the output of ExtractAddresses.
+message AddressList {
+  repeated Address addresses = 1;
+  Error error = 2;
+}
+
+// The result of CountContacts.
+message VCardCountResult {
+  // Declared `optional` for the same reason as VCardList.count above: 0 is a
+  // legitimate count, not an absent one.
+  optional int32 count = 1;
+  Error error = 2;
+}
+
+// The result of ExtractName: just a card's FN + structured N, without
+// parsing every other property.
+message VCardNameResult {
+  string formatted_name = 1;
+  Name name = 2;
+  Error error = 3;
+}

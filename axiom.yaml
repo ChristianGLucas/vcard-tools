@@ -1,0 +1,140 @@
+name: christiangeorgelucas/vcard-tools
+version: 0.1.0
+language: java
+description: >-
+  Composable Axiom vCard (RFC 6350 / 2426 / 2425) CONTACT-CARD nodes — parse a
+  .vcf document into a normalized VCard structure (formatted/structured name,
+  nicknames, emails, phones, addresses, org/title/role, URLs, birthday/
+  anniversary, notes, categories, photo metadata, IMPP, geo) or a whole
+  multi-contact document into an array, build/serialize a .vcf document back
+  from that same structure, validate a vCard against its version's rules,
+  detect a document's vCard version(s), convert every vCard in a document
+  between versions (2.1/3.0 -> 3.0/4.0), extract just the emails/phones/
+  addresses or just the name from a single card, count the contacts in a
+  document, and normalize/canonicalize a vCard document — over a single
+  VCard envelope, wrapping the BSD-licensed reference JVM library ez-vcard.
+  Offline, deterministic, and the PIM sibling of
+  christiangeorgelucas/icalendar-tools (calendar files rather than contact
+  cards).
+author: Christian George Lucas
+license: MIT
+tags:
+    - vcard
+    - vcf
+    - contact
+    - rfc6350
+    - address-book
+    - pim
+nodes:
+    - name: ParseVCard
+      input: VCardTextInput
+      output: VCard
+      description: >-
+        Parse a document containing EXACTLY ONE vCard into a normalized
+        VCard: formatted/structured name, nicknames, emails, phones,
+        addresses, org/title/role, URLs, birthday/anniversary, notes,
+        categories, photo metadata, IMPP handles, and geo. Returns a
+        structured INVALID_ARGUMENT error (rather than silently picking one)
+        when the document contains zero or more than one vCard — use
+        ParseVCardList for multi-contact documents. Input capped at 5 MiB.
+    - name: ParseVCardList
+      input: VCardTextInput
+      output: VCardList
+      description: >-
+        Parse a document containing zero or more vCards into a VCardList
+        (one normalized VCard per BEGIN:VCARD/END:VCARD block, in document
+        order, plus the count). An empty or whitespace-only document
+        legitimately parses to an empty list rather than an error. Input
+        capped at 5 MiB.
+    - name: BuildVCard
+      input: VCard
+      output: VCardTextOutput
+      description: >-
+        Generate a valid .vcf document for a single vCard from a normalized
+        VCard structure — the reverse of ParseVCard; Parse(Build(x))
+        round-trips every field. Serializes at the version named in
+        VCard.version ("2.1", "3.0", or "4.0"; defaults to "4.0" when empty).
+        Rejects a VCard with both formatted_name and name empty (RFC 6350
+        requires at least a usable name) with a structured error rather than
+        emitting an invalid vCard.
+    - name: ValidateVCard
+      input: VCardTextInput
+      output: VCardValidationResult
+      description: >-
+        Validate a document containing exactly one vCard against its own
+        declared (or, if absent, inferred) version's rules: reports valid=false
+        with one issue per problem (a parse failure, or an ez-vcard validation
+        rule broken — e.g. a vCard 4 card missing its required VERSION/FN)
+        rather than throwing. valid=true means the document is exactly one
+        vCard, it parses, and no ERROR-severity issue was raised.
+    - name: DetectVersion
+      input: VCardTextInput
+      output: VCardVersionResult
+      description: >-
+        Detect the vCard version of a document: `version` is the first
+        vCard's version, and `card_versions` lists every vCard block's
+        version in document order — so a caller can tell at a glance whether
+        a multi-contact document mixes versions. Both empty when the
+        document contains no vCard at all (not an error: absence of a vCard
+        is a valid detection result).
+    - name: ConvertVersion
+      input: VCardConvertInput
+      output: VCardTextOutput
+      description: >-
+        Convert every vCard in a document to a target version ("3.0" or
+        "4.0"). Re-parses each source vCard and re-serializes it at the
+        target version, remapping version-specific constructs (e.g. vCard
+        2.1/3.0's bare TEL values become vCard 4's "tel:" URIs; vCard 4-only
+        properties such as KIND/ANNIVERSARY/GENDER are dropped when the
+        target is 3.0, since 3.0 has no equivalent). Rejects a target_version
+        other than "3.0"/"4.0" with a structured error.
+    - name: ExtractEmails
+      input: VCardTextInput
+      output: EmailList
+      description: >-
+        Extract just the EMAIL properties from a document containing exactly
+        one vCard, each with its TYPE parameters and PREF rank. Same
+        single-card discipline as ParseVCard: a structured error, not a
+        guess, when the document holds zero or more than one vCard.
+    - name: ExtractPhones
+      input: VCardTextInput
+      output: PhoneList
+      description: >-
+        Extract just the TEL properties from a document containing exactly
+        one vCard, each with its TYPE parameters and PREF rank. Same
+        single-card discipline as ParseVCard.
+    - name: ExtractAddresses
+      input: VCardTextInput
+      output: AddressList
+      description: >-
+        Extract just the ADR properties from a document containing exactly
+        one vCard, each split into its structured components (PO box,
+        street, locality, region, postal code, country) plus TYPE/PREF/LABEL.
+        Same single-card discipline as ParseVCard.
+    - name: CountContacts
+      input: VCardTextInput
+      output: VCardCountResult
+      description: >-
+        Count the vCards (BEGIN:VCARD/END:VCARD blocks) in a document. 0 is a
+        legitimate result for an empty document or one with no recognizable
+        vCard content — this node only errors on an actual parse/size
+        failure, never on "zero found."
+    - name: NormalizeVCard
+      input: VCardTextInput
+      output: VCardTextOutput
+      description: >-
+        Canonicalize a document: parse every vCard in it and re-serialize
+        each at its own original version with consistent RFC-compliant
+        property ordering, line folding, and parameter formatting, dropping
+        no data. Useful for byte-stable comparison or diffing of two vCards
+        that are semantically identical but formatted differently.
+    - name: ExtractName
+      input: VCardTextInput
+      output: VCardNameResult
+      description: >-
+        Extract just the FN (formatted_name) and structured N (name) from a
+        document containing exactly one vCard, without parsing every other
+        property. Same single-card discipline as ParseVCard.
+build:
+    maven_deps:
+        - com.googlecode.ez-vcard:ez-vcard:0.12.2
