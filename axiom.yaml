@@ -52,11 +52,14 @@ nodes:
       description: >-
         Generate a valid .vcf document for a single vCard from a normalized
         VCard structure — the reverse of ParseVCard; Parse(Build(x))
-        round-trips every field. Serializes at the version named in
-        VCard.version ("2.1", "3.0", or "4.0"; defaults to "4.0" when empty).
-        Rejects a VCard with both formatted_name and name empty (RFC 6350
-        requires at least a usable name) with a structured error rather than
-        emitting an invalid vCard.
+        round-trips every field with one deliberate exception: a PHOTO that
+        was inline data (rather than a URL) at parse time carries no bytes in
+        this envelope (metadata only, to keep output bounded) and so cannot
+        be re-embedded — only a URL-referenced PHOTO round-trips. Serializes
+        at the version named in VCard.version ("2.1", "3.0", or "4.0";
+        defaults to "4.0" when empty). Rejects a VCard with both
+        formatted_name and name empty (RFC 6350 requires at least a usable
+        name) with a structured error rather than emitting an invalid vCard.
     - name: ValidateVCard
       input: VCardTextInput
       output: VCardValidationResult
@@ -83,11 +86,13 @@ nodes:
       description: >-
         Convert every vCard in a document to a target version ("3.0" or
         "4.0"). Re-parses each source vCard and re-serializes it at the
-        target version, remapping version-specific constructs (e.g. vCard
-        2.1/3.0's bare TEL values become vCard 4's "tel:" URIs; vCard 4-only
-        properties such as KIND/ANNIVERSARY/GENDER are dropped when the
-        target is 3.0, since 3.0 has no equivalent). Rejects a target_version
-        other than "3.0"/"4.0" with a structured error.
+        target version: each property's VALUE FORM is preserved exactly as
+        ez-vcard originally captured it (a TEL that was a bare number stays a
+        bare number; it is not synthesized into a "tel:" URI just because the
+        target is 4.0), while properties with NO equivalent in the target
+        version are dropped (e.g. vCard 4-only KIND/ANNIVERSARY/GENDER are
+        dropped when the target is 3.0). Rejects a target_version other than
+        "3.0"/"4.0" with a structured error.
     - name: ExtractEmails
       input: VCardTextInput
       output: EmailList

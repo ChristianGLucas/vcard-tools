@@ -91,9 +91,11 @@ message Email {
 
 // A TEL property.
 message Phone {
-  // The raw property value: a tel: URI in vCard 4 ("tel:+1-555-555-0100") or
-  // a bare number in vCard 2.1/3.0 ("+1 555 555 0100"), preserved as ez-vcard
-  // returns it — this node never reformats the number itself.
+  // The raw property value, preserved exactly in whatever form the source
+  // vCard used it: a "tel:" URI ("tel:+1-555-555-0100") or a bare number
+  // ("+1 555 555 0100") — either form is legal in any version, and this
+  // package never converts one into the other (including in ConvertVersion,
+  // which changes the VERSION line but never rewrites a TEL's value form).
   string value = 1;
   // TYPE parameter values, lowercased, e.g. "work", "cell", "fax", "voice".
   repeated string types = 2;
@@ -193,7 +195,11 @@ message VCard {
   // ORG property, remaining components (organizational unit names, outer to
   // inner).
   repeated string org_units = 11;
+  // TITLE. A vCard may legally repeat TITLE; only the FIRST is surfaced
+  // here (this field is singular, not repeated) — any additional TITLE
+  // lines are silently not represented.
   string title = 12;
+  // ROLE. Same first-only caveat as `title` above.
   string role = 13;
   repeated Url urls = 14;
   // BDAY, as an ISO 8601 date ("1990-04-15") or a year-less partial date

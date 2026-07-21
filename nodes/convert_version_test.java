@@ -25,6 +25,22 @@ public class ConvertVersionTest {
     }
 
     @Test
+    public void testConvertVersion_telValueFormIsPreservedNotRewrittenToUri() {
+        // Pins the documented (and previously-mismatched) contract: converting to 4.0
+        // does NOT synthesize a "tel:" URI from a bare-number TEL — the value form is
+        // whatever ez-vcard originally captured, unchanged by version conversion.
+        AxiomContext ax = TestSupport.ax();
+        VCardTextOutput out = ConvertVersion.convertVersion(ax, VCardConvertInput.newBuilder()
+                .setText(TestSupport.SAMPLE_VCARD_30).setTargetVersion("4.0").build());
+        assertFalse(out.hasError());
+        assertTrue(out.getText().contains("+1 555 555 0177"), out.getText());
+        assertFalse(out.getText().contains("tel:+1"), out.getText());
+
+        var reparsed = ParseVCard.parseVCard(ax, VCardTextInput.newBuilder().setText(out.getText()).build());
+        assertEquals("+1 555 555 0177", reparsed.getPhones(0).getValue());
+    }
+
+    @Test
     public void testConvertVersion_multiCardDocumentConvertsEachCard() {
         AxiomContext ax = TestSupport.ax();
         String doc = TestSupport.SAMPLE_VCARD_30 + TestSupport.SAMPLE_VCARD_40;
