@@ -40,14 +40,4 @@ public class ParseVCardListTest {
         assertFalse(r.hasError());
         assertEquals(1, r.getCount());
     }
-
-    @Test
-    public void testParseVCardList_oversizedInputReturnsLimitExceeded() {
-        AxiomContext ax = TestSupport.ax();
-        StringBuilder huge = new StringBuilder();
-        for (int i = 0; i < (5 * 1024 * 1024) + 1; i++) huge.append('x');
-        VCardList r = ParseVCardList.parseVCardList(ax, VCardTextInput.newBuilder().setText(huge.toString()).build());
-        assertTrue(r.hasError());
-        assertEquals("LIMIT_EXCEEDED", r.getError().getCode());
-    }
 }

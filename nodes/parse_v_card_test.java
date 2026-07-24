@@ -96,15 +96,6 @@ public class ParseVCardTest {
         assertEquals("INVALID_ARGUMENT", r.getError().getCode());
     }
 
-    @Test
-    public void testParseVCard_oversizedInputReturnsLimitExceeded() {
-        AxiomContext ax = TestSupport.ax();
-        StringBuilder huge = new StringBuilder();
-        for (int i = 0; i < (5 * 1024 * 1024) + 1; i++) huge.append('x');
-        VCard r = ParseVCard.parseVCard(ax, VCardTextInput.newBuilder().setText(huge.toString()).build());
-        assertTrue(r.hasError());
-        assertEquals("LIMIT_EXCEEDED", r.getError().getCode());
-    }
 
     @Test
     public void testParseVCard_propagatesUpstreamError() {

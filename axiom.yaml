@@ -1,5 +1,5 @@
 name: christiangeorgelucas/vcard-tools
-version: 0.1.0
+version: 0.1.1
 language: java
 description: >-
   Composable Axiom vCard (RFC 6350 / 2426 / 2425) CONTACT-CARD nodes — parse a

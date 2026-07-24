@@ -42,7 +42,6 @@ import ezvcard.property.Uid;
 import ezvcard.property.VCardProperty;
 import ezvcard.util.PartialDate;
 
-import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -64,9 +63,6 @@ import java.util.Map;
 final class VCardHelper {
 
     private VCardHelper() {}
-
-    /** Raw vCard input larger than this is rejected before any parsing is attempted. */
-    static final int MAX_INPUT_BYTES = 5 * 1024 * 1024;
 
     /** A structured failure, carrying the same (code, message) shape as the proto Error. */
     static final class VCardException extends Exception {
@@ -97,24 +93,13 @@ final class VCardHelper {
         return Error.newBuilder().setCode("INTERNAL").setMessage(String.valueOf(t.getMessage())).build();
     }
 
-    // ---- size-bounded parse -----------------------------------------------------------
-
-    static void checkSize(String text) throws VCardException {
-        if (text == null) {
-            throw new VCardException("INVALID_ARGUMENT", "text is required");
-        }
-        int bytes = text.getBytes(StandardCharsets.UTF_8).length;
-        if (bytes > MAX_INPUT_BYTES) {
-            throw new VCardException("LIMIT_EXCEEDED",
-                    "text is " + bytes + " bytes, exceeding the " + MAX_INPUT_BYTES + " byte cap");
-        }
-    }
-
     /** Parses every vCard in the document. Never throws for "zero found" — an empty or
      *  non-vCard document legitimately yields an empty list; only a genuine I/O-level
      *  parse fault throws. */
     static List<ezvcard.VCard> parseAll(String text) throws VCardException {
-        checkSize(text);
+        if (text == null) {
+            throw new VCardException("INVALID_ARGUMENT", "text is required");
+        }
         try {
             return Ezvcard.parse(text).all();
         } catch (Exception e) {

@@ -38,9 +38,9 @@ option java_outer_classname = "Messages";
 // A structured, deterministic failure. Every output message carries one; it is
 // unset on success. Nodes never throw on bad input — they return this instead.
 message Error {
-  // Stable machine-readable code: INVALID_VCARD, INVALID_ARGUMENT,
-  // LIMIT_EXCEEDED, or INTERNAL. INTERNAL means the package itself faulted,
-  // not the caller's input.
+  // Stable machine-readable code: INVALID_VCARD, INVALID_ARGUMENT, or
+  // INTERNAL. INTERNAL means the package itself faulted, not the caller's
+  // input.
   string code = 1;
   // Human-readable detail naming exactly what was rejected and why.
   string message = 2;
@@ -48,8 +48,7 @@ message Error {
 
 // Raw vCard document text, the input to every parsing/inspection node. Holds
 // zero or more concatenated "BEGIN:VCARD ... END:VCARD" blocks, exactly as a
-// .vcf file would contain. Capped at 5 MiB; larger input is rejected with
-// LIMIT_EXCEEDED before any parsing is attempted.
+// .vcf file would contain.
 message VCardTextInput {
   string text = 1;
   Error error = 2;
